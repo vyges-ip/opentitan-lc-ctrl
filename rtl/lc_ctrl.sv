@@ -342,20 +342,26 @@ module lc_ctrl
 
   logic lc_idle_d, lc_done_d;
 
-  // Assign the hardware revision constant and feed it through an anchor buffer. This ensures the
-  // individual bits remain visible in the netlist, thereby enabling metal fixes to be reflected
-  // in the hardware revision.
-  lc_hw_rev_t hw_rev;
-  assign hw_rev = '{silicon_creator_id: SiliconCreatorId,
-                    product_id:         ProductId,
-                    revision_id:        RevisionId,
-                    reserved:           '0};
-  prim_sec_anchor_buf #(
-    .Width($bits(lc_hw_rev_t))
-  ) u_hw_rev_anchor_buf (
-    .in_i(hw_rev),
-    .out_o(hw_rev_o)
+  // Create the hardware revision with the anchor const that instantiates specific standard cells.
+  // This ensures the individual bits are not combined through logic optimization and remain visible
+  // in the netlist, thereby enabling metal fixes to be reflected in the hardware revision.
+  localparam int HwRevWidth = $bits(lc_hw_rev_t);
+  localparam lc_hw_rev_t HwRev = '{silicon_creator_id: SiliconCreatorId,
+                                   product_id:         ProductId,
+                                   revision_id:        RevisionId,
+                                   reserved:           '0};
+
+  // We need to first cast HwRev to a logic array and then back to lc_hw_rev_t
+  // This explicit cast is required because some tools misinterpret packed struct parameters as
+  // integers, leading to MSB truncation
+  logic [HwRevWidth-1:0] hw_rev_raw;
+  prim_const #(
+    .Width(HwRevWidth),
+    .ConstVal(HwRevWidth'(HwRev))
+  ) u_hw_rev_const (
+    .out_o(hw_rev_raw)
   );
+  assign hw_rev_o = lc_hw_rev_t'(hw_rev_raw);
 
   // OTP Vendor control bits
   logic ext_clock_switched;
